@@ -22,7 +22,7 @@ type APIInterface interface {
 	deleteObject(dn string) error
 	updateObject(dn string, classes []string, added, changed, removed map[string][]string) error
 
-	// comupter objects
+	// computer objects
 	getComputer(name string) (*Computer, error)
 	createComputer(cn, ou, description string) error
 	updateComputerOU(cn, ou, newOU string) error
@@ -36,6 +36,14 @@ type APIInterface interface {
 	updateOUName(name, baseOU, newName string) error
 	updateOUDescription(cn, baseOU, description string) error
 	deleteOU(dn string) error
+
+	// user objects
+	getUser(firstName, lastName string) (*User, error)
+	createUser(firstName, lastName, ou, description string) error
+	updateUserOU(cn, ou, newOU string) error
+	updateUserDescription(cn, ou, description string) error
+	deleteUser(firstName, lastName, ou string) error
+
 }
 
 // API is the basic struct which should implement the interface
