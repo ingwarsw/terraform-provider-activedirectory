@@ -186,15 +186,20 @@ func createDN(d *schema.ResourceData) string {
 func prepareAttributes(d *schema.ResourceData) map[string]string {
 	firstName := d.Get("first_name").(string)
 	lastName := d.Get("last_name").(string)
+	description := d.Get("description").(string)
 
 	attributes := make(map[string]string)
 	attributes["name"] = firstName + " " + lastName
 	attributes["GivenName"] = firstName
 	attributes["sn"] = lastName
-	attributes["description"] = d.Get("description").(string)
+	attributes["SamAccountName"] = d.Get("login").(string)
 	attributes["userPassword"] = d.Get("password").(string)
 	attributes["userPrincipalName"] = d.Get("email").(string)
 	attributes["userAccountControl"] = "544"
+
+	if description != "" {
+		attributes["description"] = description
+	}
 
 	finalAttributes := make(map[string]string)
 
