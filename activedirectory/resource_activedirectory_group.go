@@ -11,7 +11,7 @@ import (
 // resourceADGroupObject is the main function for ad ou terraform resource
 func resourceADGroupObject() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceADGroupObjectCreate,
+		Create: resourceADGroupObjectUpdate,
 		Read:   resourceADGroupObjectRead,
 		Update: resourceADGroupObjectUpdate,
 		Delete: resourceADGroupObjectDelete,
@@ -143,78 +143,51 @@ func resourceADGroupObjectRead(d *schema.ResourceData, meta interface{}) error {
 
 // resourceADGroupObjectUpdate is 'update' part of terraform CRUD functions for ad provider
 func resourceADGroupObjectUpdate(d *schema.ResourceData, meta interface{}) error {
+	d.SetId(strings.ToLower(fmt.Sprintf("ou=%s,%s", d.Get("name").(string), d.Get("base_ou").(string))))
+	return resourceADGroupObjectChange(d, meta, true)
+}
+
+func resourceADGroupObjectChange(d *schema.ResourceData, meta interface{}, add bool) error {
 	log.Infof("Updating AD Group object")
 
 	api := meta.(APIInterface)
 
-	oldOU, newOU := d.GetChange("base_ou")
-	oldName, newName := d.GetChange("name")
-	// let's try to update in parts
-	d.Partial(true)
-	oldUserBase, newUserBase := d.GetChange("user_base")
-	log.Infof("New userBase: %s", newUserBase)
+	oldOU := d.Get("base_ou").(string)
+	oldName := d.Get("name").(string)
+	oldUserBase := d.Get("user_base").(string)
 
-	// check description
-	if d.HasChange("description") {
-		if err := api.updateGroupDescription(newName.(string), newOU.(string), d.Get("description").(string)); err != nil {
-			return fmt.Errorf("resourceADGroupObjectUpdate - update description - %s", err)
-		}
-
-		d.SetPartial("description")
+	member := d.Get("member")
+	memberList := make([]string, 0)
+	for _, m := range member.(*schema.Set).List() {
+		memberList = append(memberList, m.(string))
 	}
 
-	oldMember, newMember := d.GetChange("member")
-	newMemberList := make([]string, 0)
-	for _, m := range newMember.(*schema.Set).List() {
-		newMemberList = append(newMemberList, m.(string))
-	}
-	oldMemberList := make([]string, 0)
-	for _, m := range oldMember.(*schema.Set).List() {
-		oldMemberList = append(oldMemberList, m.(string))
-	}
-	log.Infof("Old members %s, New mebmers %s", oldMember, newMemberList)
-	if d.HasChange("member") {
-		ignoreMembersUnknownByTerraform := d.Get("ignore_members_unknown_by_terraform").(bool)
-		if err := api.updateGroupMembers(
-			oldName.(string),
-			oldOU.(string),
-			oldUserBase.(string),
-			oldMemberList,
-			newMemberList,
-			ignoreMembersUnknownByTerraform); err != nil {
-			return fmt.Errorf("resourceADGroupObjectUpdate - update members - %s", err)
-		}
+	oldList := make([]string, 0)
+	newList := make([]string, 0)
 
-		d.SetPartial("member")
-	}
-	// check name
-	if d.HasChange("name") {
-		if err := api.renameGroup(oldName.(string), oldOU.(string), newName.(string)); err != nil {
-			return fmt.Errorf("resourceADGroupObjectUpdate - update group name - %s", err)
-		}
-
-		d.SetPartial("name")
+	if add {
+		newList = memberList
+	} else {
+		oldList = memberList
 	}
 
-	// check base_ou
-	if d.HasChange("base_ou") {
-		if err := api.moveGroup(newName.(string), oldOU.(string), newOU.(string)); err != nil {
-			return fmt.Errorf("resourceADGroupObjectUpdate - move ou - %s", err)
-		}
+	log.Infof("Old members %s, New members %s", oldList, newList)
+	ignoreMembersUnknownByTerraform := d.Get("ignore_members_unknown_by_terraform").(bool)
+	if err := api.updateGroupMembers(
+		oldName,
+		oldOU,
+		oldUserBase,
+		oldList,
+		newList,
+		ignoreMembersUnknownByTerraform); err != nil {
+		return fmt.Errorf("resourceADGroupObjectUpdate - update members - %s", err)
 	}
-	d.Partial(false)
-	d.SetId(strings.ToLower(fmt.Sprintf("cn=%s,%s", newName.(string), newOU.(string))))
 
-	// read current ad data to avoid drift
 	return resourceADGroupObjectRead(d, meta)
 }
 
 // resourceADGroupObjectDelete is 'delete' part of terraform CRUD functions for ad provider
 func resourceADGroupObjectDelete(d *schema.ResourceData, meta interface{}) error {
 	log.Infof("Deleting AD Group object")
-
-	api := meta.(APIInterface)
-
-	// call ad to delete the ou object, no error means that object was deleted successfully
-	return api.deleteGroup(strings.ToLower(fmt.Sprintf("cn=%s,%s", d.Get("name").(string), d.Get("base_ou").(string))))
+	return resourceADGroupObjectChange(d, meta, false)
 }
