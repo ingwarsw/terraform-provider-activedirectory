@@ -39,11 +39,10 @@ type APIInterface interface {
 
 	// user objects
 	getUser(firstName, lastName string) (*User, error)
-	createUser(firstName, lastName, ou, description string) error
+	createUser(dn string, attributes map[string]string) error
 	updateUserOU(cn, ou, newOU string) error
 	updateUserDescription(cn, ou, description string) error
-	deleteUser(firstName, lastName, ou string) error
-
+	deleteUser(dn string) error
 }
 
 // API is the basic struct which should implement the interface

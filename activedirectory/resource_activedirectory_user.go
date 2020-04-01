@@ -38,6 +38,7 @@ func resourceADOUserObject() *schema.Resource {
 			"ou": {
 				Type:     schema.TypeString,
 				Required: true,
+				ForceNew: true,
 				// this is to ignore case in ad distinguished name
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					return strings.EqualFold(old, new)
@@ -74,8 +75,15 @@ func resourceADOUserObject() *schema.Resource {
 					return strings.EqualFold(old, new)
 				},
 			},
+			"attributes": {
+				Type:     schema.TypeMap,
+				Optional: true,
+				ForceNew: true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+			},
 			"description": {
 				Type:     schema.TypeString,
+				//ForceNew: true,
 				Optional: true,
 				Default:  nil,
 			},
@@ -89,14 +97,11 @@ func resourceADOUserObjectCreate(d *schema.ResourceData, meta interface{}) error
 
 	api := meta.(APIInterface)
 
-	if err := api.createUser(d.Get("first_name").(string),
-		d.Get("last_name").(string),
-		d.Get("ou").(string),
-		d.Get("description").(string)); err != nil {
+	if err := api.createUser(createDN(d), prepareAttributes(d)); err != nil {
 		return fmt.Errorf("resourceADOUserObjectCreate - create - %s", err)
 	}
 
-	d.SetId(strings.ToLower(fmt.Sprintf("cn=%s %s,%s", d.Get("first_name").(string), d.Get("last_name").(string), d.Get("ou").(string))))
+	d.SetId(strings.ToLower(createDN(d)))
 	return resourceADOUserObjectRead(d, meta)
 }
 
@@ -112,7 +117,7 @@ func resourceADOUserObjectRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if User == nil {
-		log.Infof("User object %s no longer exists", d.Get("name").(string))
+		log.Infof("User object %s no longer exists", createDN(d))
 
 		d.SetId("")
 		return nil
@@ -120,7 +125,7 @@ func resourceADOUserObjectRead(d *schema.ResourceData, meta interface{}) error {
 
 	d.SetId(strings.ToLower(User.dn))
 
-	if err := d.Set("description", User.description); err != nil {
+	if err := d.Set("description", User.attributes["description"]); err != nil {
 		return fmt.Errorf("resourceADOUserObjectRead - set description - failed to set description: %s", err)
 	}
 
@@ -168,5 +173,38 @@ func resourceADOUserObjectDelete(d *schema.ResourceData, meta interface{}) error
 	api := meta.(APIInterface)
 
 	// call ad to delete the User object, no error means that object was deleted successfully
-	return api.deleteUser(d.Get("name").(string), "", d.Get("ou").(string))
+	return api.deleteUser(createDN(d))
+}
+
+func createDN(d *schema.ResourceData) string {
+	firstName := d.Get("first_name").(string)
+	lastName := d.Get("last_name").(string)
+	ou := d.Get("ou").(string)
+	return fmt.Sprintf("cn=%s %s,%s", firstName, lastName, ou)
+}
+
+func prepareAttributes(d *schema.ResourceData) map[string]string {
+	firstName := d.Get("first_name").(string)
+	lastName := d.Get("last_name").(string)
+
+	attributes := make(map[string]string)
+	attributes["name"] = firstName + " " + lastName
+	attributes["GivenName"] = firstName
+	attributes["sn"] = lastName
+	attributes["description"] = d.Get("description").(string)
+	attributes["userPassword"] = d.Get("password").(string)
+	attributes["userPrincipalName"] = d.Get("email").(string)
+	attributes["userAccountControl"] = "544"
+
+	finalAttributes := make(map[string]string)
+
+	for key, value := range attributes {
+		finalAttributes[strings.ToLower(key)] = value
+	}
+
+	for key, value := range d.Get("attributes").(map[string]interface{}) {
+		finalAttributes[strings.ToLower(key)] = value.(string)
+	}
+
+	return finalAttributes
 }
