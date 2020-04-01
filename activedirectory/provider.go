@@ -61,6 +61,7 @@ func Provider() terraform.ResourceProvider {
 			"activedirectory_computer": resourceADComputerObject(),
 			"activedirectory_ou":       resourceADOUObject(),
 			"activedirectory_user":     resourceADOUserObject(),
+			"activedirectory_group":       resourceADGroupObject(),
 		},
 
 		ConfigureFunc: providerConfigure,
